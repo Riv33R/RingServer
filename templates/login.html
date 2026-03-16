@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход — RingScheduler</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-page">
+    <div class="login-bg">
+        <div class="login-rings">
+            <div class="ring ring-1"></div>
+            <div class="ring ring-2"></div>
+            <div class="ring ring-3"></div>
+        </div>
+        <div class="login-card">
+            <div class="login-logo">
+                <span class="login-logo-icon">🔔</span>
+                <h1>RingScheduler</h1>
+                <p>Система управления школьными звонками</p>
+            </div>
+
+            {% if error %}
+            <div class="login-error">
+                <span>⚠️</span> {{ error }}
+            </div>
+            {% endif %}
+
+            <form class="login-form" method="POST">
+                <div class="form-group">
+                    <label for="username">Логин</label>
+                    <input type="text" class="form-input" id="username" name="username" placeholder="Введите логин" 
+                           autocomplete="username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Пароль</label>
+                    <div class="password-wrap">
+                        <input type="password" class="form-input" id="password" name="password" placeholder="Введите пароль"
+                               autocomplete="current-password" required>
+                        <button type="button" class="pw-toggle" onclick="togglePw()">👁</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg btn-full">
+                    Войти в систему
+                </button>
+            </form>
+
+            <p class="login-hint">Если вы забыли пароль, обратитесь к системному администратору.</p>
+        </div>
+    </div>
+    <script>
+    function togglePw() {
+        const inp = document.getElementById('password');
+        inp.type = inp.type === 'password' ? 'text' : 'password';
+    }
+    </script>
+</body>
+</html>

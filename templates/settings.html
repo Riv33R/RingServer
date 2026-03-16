@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Настройки{% endblock %}
+{% block page_title %}Настройки системы{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+
+    <!-- Bell mode settings -->
+    <div class="card mb-4">
+        <h3 class="card-title">⚙️ Режим работы звонка</h3>
+        <form id="settingsForm">
+            <div class="form-group">
+                <label class="form-label">Режим подачи звонка</label>
+                <select class="form-select" id="sBellMode" name="BELL_MODE">
+                    <option value="audio" {% if cfg.BELL_MODE == 'audio' %}selected{% endif %}>🔊 Воспроизведение аудио</option>
+                    <option value="script" {% if cfg.BELL_MODE == 'script' %}selected{% endif %}>⚡ Запуск скрипта (реле)</option>
+                    <option value="both" {% if cfg.BELL_MODE == 'both' %}selected{% endif %}>🔊+⚡ Аудио + Скрипт</option>
+                    <option value="log" {% if cfg.BELL_MODE == 'log' %}selected{% endif %}>📋 Только журнал (тест)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Путь к скрипту реле (.bat или .py)</label>
+                <input type="text" class="form-input" id="sRelayScript" name="RELAY_SCRIPT"
+                       value="{{ cfg.RELAY_SCRIPT or '' }}"
+                       placeholder="C:\scripts\ring.bat">
+                <small class="form-hint">Скрипт получит аргумент с длительностью звонка в секундах.</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Аудиофайл по умолчанию</label>
+                <select class="form-select" id="sDefaultSound" name="DEFAULT_SOUND">
+                    <option value="">— Системный звук (beep) —</option>
+                    {% for f in audio_files %}
+                    <option value="uploads/{{ f }}" {% if cfg.DEFAULT_SOUND == 'uploads/' ~ f %}selected{% endif %}>
+                        {{ f }}
+                    </option>
+                    {% endfor %}
+                    {% if cfg.DEFAULT_SOUND and cfg.DEFAULT_SOUND.replace('uploads/', '') not in audio_files %}
+                    <option value="{{ cfg.DEFAULT_SOUND }}" selected>{{ cfg.DEFAULT_SOUND }}</option>
+                    {% endif %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Длительность звонка по умолчанию (секунды)</label>
+                <input type="number" class="form-input form-input-sm" id="sBellDuration" name="BELL_DURATION"
+                       min="1" max="60" value="{{ cfg.BELL_DURATION or 5 }}">
+            </div>
+            <div class="form-row">
+                <button type="submit" class="btn btn-primary">Сохранить настройки</button>
+                <button type="button" class="btn btn-ghost" onclick="testBell()">🔔 Тест звонка</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Audio upload -->
+    <div class="card mb-4">
+        <h3 class="card-title">🎵 Загрузка аудиофайлов</h3>
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="audioFileInput" accept=".mp3,.wav,.ogg" onchange="uploadAudio(this)" hidden>
+            <button class="btn btn-ghost" onclick="document.getElementById('audioFileInput').click()">
+                📁 Выбрать файл MP3 / WAV / OGG
+            </button>
+            <p class="upload-hint">Загруженные файлы хранятся в папке <code>uploads/</code></p>
+        </div>
+        {% if audio_files %}
+        <div class="audio-files-list">
+            {% for f in audio_files %}
+            <div class="audio-file-item" id="audio-file-{{ loop.index }}">
+                <span class="audio-icon">🎵</span>
+                <span class="audio-name">{{ f }}</span>
+                <code class="audio-path">uploads/{{ f }}</code>
+                <button type="button" class="btn btn-sm btn-danger-ghost" onclick="deleteAudio('{{ f }}', 'audio-file-{{ loop.index }}')" style="margin-left: 10px;">🗑️ Удалить</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state"><span>🎵</span><p>Аудиофайлы не загружены</p></div>
+        {% endif %}
+    </div>
+
+    <!-- User management -->
+    <div class="card mb-4">
+        <h3 class="card-title">👤 Управление пользователями</h3>
+        <div class="users-table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Логин</th>
+                        <th>Роль</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u.username }}</td>
+                        <td><span class="role-badge {% if u.is_admin %}role-admin{% endif %}">{{ 'Администратор' if u.is_admin else 'Пользователь' }}</span></td>
+                        <td>
+                            {% if not u.is_admin %}
+                            <button class="btn btn-sm btn-danger-ghost" onclick="deleteUser({{ u.id }}, '{{ u.username }}')">Удалить</button>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-3">
+            <button class="btn btn-ghost" onclick="openAddUser()">+ Добавить пользователя</button>
+        </div>
+    </div>
+
+    <!-- Change password -->
+    <div class="card">
+        <h3 class="card-title">🔒 Изменить пароль</h3>
+        <form id="changePasswordForm">
+            <div class="form-group">
+                <label class="form-label">Текущий пароль</label>
+                <input type="password" class="form-input" id="cpOld" autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Новый пароль</label>
+                <input type="password" class="form-input" id="cpNew" autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn btn-primary">Изменить пароль</button>
+        </form>
+    </div>
+</div>
+
+<div class="settings-grid mb-4" style="margin-top: 20px;">
+    <!-- Backup / Restore -->
+    <div class="card">
+        <h3 class="card-title">💾 Резервное копирование</h3>
+        <p class="text-sm text-muted mb-3">Скачать или восстановить полную резервную копию настроек и расписания звонков (базы данных).</p>
+        <div class="action-btns" style="flex-wrap: wrap; gap: 10px;">
+            <button class="btn btn-primary" onclick="downloadBackup()">
+                ⬇ Скачать резервную копию
+            </button>
+            <button class="btn btn-ghost" onclick="document.getElementById('backupFileInput').click()">
+                ⬆ Восстановить из копии
+            </button>
+            <input type="file" id="backupFileInput" accept=".zip" style="display:none" onchange="restoreBackup(event)">
+        </div>
+        <div class="form-hint mt-3 text-warning">При восстановлении все текущие настройки будут затерты! Сервер будет перезапущен.</div>
+    </div>
+</div>
+
+<!-- Add user modal -->
+<div class="modal-backdrop" id="addUserModal" onclick="closeModal(event)">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Добавить пользователя</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <form id="addUserForm">
+            <div class="form-group">
+                <label class="form-label">Логин</label>
+                <input type="text" class="form-input" id="nuUsername" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Пароль</label>
+                <input type="password" class="form-input" id="nuPassword" required>
+            </div>
+            <div class="form-group">
+                <label class="form-check">
+                    <input type="checkbox" id="nuIsAdmin"> Права администратора
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal()">Отмена</button>
+                <button type="submit" class="btn btn-primary">Создать</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Журнал{% endblock %}
+{% block page_title %}Журнал звонков{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header-row">
+        <h3 class="card-title">История звонков</h3>
+        <span class="text-muted">Последние {{ ring_log|length }} записей</span>
+    </div>
+    {% if ring_log %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Дата и время</th>
+                    <th>Тип</th>
+                    <th>Статус</th>
+                    <th>Примечание</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in ring_log %}
+                <tr>
+                    <td class="text-muted">{{ entry.id }}</td>
+                    <td><span class="mono">{{ entry.triggered_at }}</span></td>
+                    <td>
+                        {% if entry.trigger_type == 'manual' %}
+                        <span class="badge badge-manual">🖱️ Ручной</span>
+                        {% else %}
+                        <span class="badge badge-auto">⏰ Автомат.</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if entry.success %}
+                        <span class="status-ok">✓ Успешно</span>
+                        {% else %}
+                        <span class="status-fail">✗ Ошибка</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted">{{ entry.notes or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <span>📋</span>
+        <p>Журнал пуст. Звонков ещё не было.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Расписание{% endblock %}
+{% block page_title %}Редактор расписания{% endblock %}
+
+{% block content %}
+<div class="schedule-page">
+
+    <!-- Profile selector -->
+    <div class="card mb-4">
+        <div class="card-header-row">
+            <div class="profile-selector-wrap">
+                <label class="form-label">Профиль:</label>
+                <select class="form-select profile-selector" id="profileSelect" onchange="switchProfile(this.value)">
+                    {% for p in profiles %}
+                    <option value="{{ p.id }}" {% if p.id == selected_id %}selected{% endif %}>
+                        {{ p.name }}{% if p.is_active %} ✓{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="action-btns">
+                {% if selected_id %}
+                <button class="btn btn-ghost" onclick="exportSchedule('{{ selected_id }}')" title="Скачать CSV">⬇ Экспорт CSV</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('csvFileInput').click()" title="Загрузить CSV">⬆ Импорт CSV</button>
+                <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="importSchedule('{{ selected_id }}', event)">
+                {% endif %}
+                <button class="btn btn-primary" onclick="openAddModal()">
+                    + Добавить звонок
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bell table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="data-table" id="bellTable">
+                <thead>
+                    <tr>
+                        <th>Время</th>
+                        <th>Название</th>
+                        <th>Тип</th>
+                        <th>Аудиофайл</th>
+                        <th>Длительность (с)</th>
+                        <th>Вкл.</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="bellTableBody">
+                    {% if bells %}
+                    {% for bell in bells %}
+                    <tr id="bell-row-{{ bell.id }}" class="{% if not bell.enabled %}row-disabled{% endif %}">
+                        <td>
+                            <span class="time-badge">{{ '%02d:%02d'|format(bell.hour, bell.minute) }}</span>
+                        </td>
+                        <td>{{ bell.label or '—' }}</td>
+                        <td>
+                            <span class="bell-type-badge bell-type-{{ bell.bell_type }}">
+                                {{ {'lesson': '🎓 Урок', 'break': '☕ Перемена', 'end': '🏁 Конец'}.get(bell.bell_type, bell.bell_type) }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="file-name">{{ bell.sound_file.split('/')[-1].split('\\')[-1] if bell.sound_file else '(по умолчанию)' }}</span>
+                        </td>
+                        <td>{{ bell.duration }}с</td>
+                        <td>
+                            <label class="toggle">
+                                <input type="checkbox" {% if bell.enabled %}checked{% endif %}
+                                       onchange="toggleBell({{ bell.id }}, this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                        <td>
+                            <div class="action-btns">
+                                <button class="btn btn-sm btn-ghost" onclick='openEditModal({{ bell|tojson|safe }})'>✏️</button>
+                                <button class="btn btn-sm btn-danger-ghost" onclick="deleteBell({{ bell.id }})">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr id="emptyRow">
+                        <td colspan="7" class="empty-table-cell">
+                            <div class="empty-state">
+                                <span>📭</span>
+                                <p>Нет звонков в этом профиле</p>
+                                <button class="btn btn-primary" onclick="openAddModal()">Добавить первый звонок</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-backdrop" id="bellModal" onclick="closeModal(event)">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 id="modalTitle">Добавить звонок</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <form id="bellForm">
+            <input type="hidden" id="bellId">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Час *</label>
+                    <input type="number" class="form-input" id="fHour" min="0" max="23" placeholder="8" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Минута *</label>
+                    <input type="number" class="form-input" id="fMinute" min="0" max="59" placeholder="0" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Название</label>
+                <input type="text" class="form-input" id="fLabel" placeholder="Например: Звонок на 1 урок">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Тип звонка</label>
+                <select class="form-select" id="fType">
+                    <option value="lesson">🎓 Начало урока</option>
+                    <option value="warning">⚠️ Предупредительный</option>
+                    <option value="break">☕ Перемена</option>
+                    <option value="end">🏁 Конец дня</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Аудиофайл</label>
+                <select class="form-select" id="fSound">
+                    <option value="">— Аудио по умолчанию —</option>
+                    {% for f in audio_files %}
+                    <option value="uploads/{{ f }}">{{ f }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Длительность (секунды)</label>
+                <input type="number" class="form-input" id="fDuration" min="1" max="60" value="5">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal()">Отмена</button>
+                <button type="submit" class="btn btn-primary" id="modalSubmitBtn">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PROFILE_ID = {{ selected_id or 'null' }};
+</script>
+<script src="{{ url_for('static', filename='js/schedule.js') }}"></script>
+{% endblock %}

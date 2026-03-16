@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Application databases and logs
+scheduler.db
+ringscheduler.log
+logs/
+config.json
+
+# Ignore uploads except gitkeep
+uploads/*
+!uploads/.gitkeep

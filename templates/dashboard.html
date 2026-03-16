@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Дашборд{% endblock %}
+{% block page_title %}Дашборд{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+
+    <!-- Big Clock Card -->
+    <div class="card card-clock">
+        <div class="clock-display">
+            <div class="clock-time" id="clockTime">--:--:--</div>
+            <div class="clock-date" id="clockDate"></div>
+        </div>
+        <div class="clock-meta">
+            <div class="profile-badge" id="profileBadge" style="--profile-color: {{ profile.color if profile else '#3b82f6' }}">
+                <span class="badge-dot"></span>
+                <span id="profileName">{{ profile.name if profile else 'Нет профиля' }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Next Bell Card -->
+    <div class="card card-next-bell" id="nextBellCard">
+        <div class="card-label">Следующий звонок</div>
+        <div class="next-bell-time" id="nextBellTime">--:--</div>
+        <div class="next-bell-label" id="nextBellLabel">Загрузка...</div>
+        <div class="next-bell-countdown">
+            <div class="countdown-bar-wrap">
+                <div class="countdown-bar" id="countdownBar"></div>
+            </div>
+            <div class="countdown-text" id="countdownText">—</div>
+        </div>
+    </div>
+
+    <!-- Manual Ring Card -->
+    <div class="card card-ring-now">
+        <div class="card-label">Управление</div>
+        <button class="btn-ring-now" id="btnRingNow" onclick="ringNow()">
+            <span class="ring-now-icon">🔔</span>
+            <span>Дать звонок сейчас</span>
+        </button>
+        <p class="ring-now-hint">Экстренный ручной звонок</p>
+    </div>
+
+    <!-- Today's Schedule Card -->
+    <div class="card card-today-schedule">
+        <div class="card-header-row">
+            <div class="card-label">Расписание на сегодня</div>
+            {% if profile %}
+            <a href="{{ url_for('schedule', profile_id=profile.id) }}" class="btn btn-sm btn-ghost">Редактировать →</a>
+            {% endif %}
+        </div>
+        {% if bells %}
+        <div class="bell-list">
+            {% for bell in bells %}
+            <div class="bell-item {% if not bell.enabled %}bell-disabled{% endif %}" data-hour="{{ bell.hour }}" data-minute="{{ bell.minute }}">
+                <span class="bell-time">{{ '%02d:%02d'|format(bell.hour, bell.minute) }}</span>
+                <span class="bell-label">{{ bell.label or '—' }}</span>
+                <span class="bell-type-badge bell-type-{{ bell.bell_type }}">
+                    {{ {'lesson': 'Урок', 'break': 'Перемена', 'end': 'Конец'}.get(bell.bell_type, bell.bell_type) }}
+                </span>
+                <span class="bell-passed-indicator" data-hour="{{ bell.hour }}" data-minute="{{ bell.minute }}"></span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <span>📭</span>
+            <p>Расписание не задано</p>
+            {% if profile %}
+            <a href="{{ url_for('schedule', profile_id=profile.id) }}" class="btn btn-sm btn-primary">Добавить звонки</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Recent Log Card -->
+    <div class="card card-log">
+        <div class="card-label">Последние звонки</div>
+        {% if ring_log %}
+        <div class="log-list">
+            {% for entry in ring_log[:8] %}
+            <div class="log-entry">
+                <span class="log-type log-type-{{ entry.trigger_type }}">
+                    {{ '🖱️' if entry.trigger_type == 'manual' else '⏰' }}
+                </span>
+                <span class="log-time">{{ entry.triggered_at[11:16] }}</span>
+                <span class="log-date">{{ entry.triggered_at[:10] }}</span>
+                <span class="log-status {{ 'log-ok' if entry.success else 'log-fail' }}">
+                    {{ '✓' if entry.success else '✗' }}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        <a href="{{ url_for('log_view') }}" class="log-more-link">Полный журнал →</a>
+        {% else %}
+        <div class="empty-state"><span>📋</span><p>Журнал пуст</p></div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

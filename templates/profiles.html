@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Профили{% endblock %}
+{% block page_title %}Профили расписания{% endblock %}
+
+{% block content %}
+<div class="profiles-page">
+
+    <!-- Weekday assignment matrix -->
+    <div class="card mb-4">
+        <h3 class="card-title">Привязка профилей к дням недели</h3>
+        <div class="week-matrix" id="weekMatrix">
+            {% set day_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] %}
+            {% for assignment in assignments %}
+            <div class="week-day-cell">
+                <div class="week-day-name">{{ day_names[assignment.weekday] }}</div>
+                <select class="form-select week-day-select" data-weekday="{{ assignment.weekday }}" onchange="setWeekAssignment({{ assignment.weekday }}, this.value)">
+                    <option value="">— Нет —</option>
+                    {% for p in profiles %}
+                    <option value="{{ p.id }}" {% if assignment.profile_id == p.id %}selected{% endif %} style="color: {{ p.color }}">
+                        {{ p.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Profiles grid -->
+    <div class="card-header-row mb-3">
+        <h3 class="section-title">Профили</h3>
+        <button class="btn btn-primary" onclick="openCreateProfile()">+ Создать профиль</button>
+    </div>
+
+    <div class="profiles-grid" id="profilesGrid">
+        {% for p in profiles %}
+        <div class="profile-card" id="profile-card-{{ p.id }}" style="--card-color: {{ p.color }}">
+            <div class="profile-card-header">
+                <div class="profile-color-dot" style="background: {{ p.color }}"></div>
+                <div class="profile-card-name">{{ p.name }}</div>
+                {% if p.is_active %}
+                <span class="active-badge">Активен</span>
+                {% endif %}
+            </div>
+            <p class="profile-desc">{{ p.description or 'Без описания' }}</p>
+            <div class="profile-card-actions">
+                <button class="btn btn-sm btn-ghost" onclick="openEditProfile({{ p|tojson|forceescape }})">✏️ Изменить</button>
+                <a href="{{ url_for('schedule', profile_id=p.id) }}" class="btn btn-sm btn-ghost">📋 Звонки</a>
+                {% if not p.is_active %}
+                <button class="btn btn-sm btn-primary" onclick="activateProfile({{ p.id }})">✓ Активировать</button>
+                {% endif %}
+                <button class="btn btn-sm btn-danger-ghost" onclick="deleteProfile({{ p.id }}, '{{ p.name }}')">🗑️</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Create/Edit Profile Modal -->
+<div class="modal-backdrop" id="profileModal" onclick="closeModal(event)">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 id="profileModalTitle">Создать профиль</h3>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <form id="profileForm">
+            <input type="hidden" id="profileId">
+            <div class="form-group">
+                <label class="form-label">Название *</label>
+                <input type="text" class="form-input" id="fProfileName" placeholder="Например: Обычный день" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Описание</label>
+                <input type="text" class="form-input" id="fProfileDesc" placeholder="Краткое описание профиля">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Цвет</label>
+                <div class="color-picker-row">
+                    <input type="color" class="color-picker" id="fProfileColor" value="#3b82f6">
+                    <div class="color-presets">
+                        <button type="button" class="color-preset" style="background:#3b82f6" onclick="setColor('#3b82f6')"></button>
+                        <button type="button" class="color-preset" style="background:#f59e0b" onclick="setColor('#f59e0b')"></button>
+                        <button type="button" class="color-preset" style="background:#10b981" onclick="setColor('#10b981')"></button>
+                        <button type="button" class="color-preset" style="background:#8b5cf6" onclick="setColor('#8b5cf6')"></button>
+                        <button type="button" class="color-preset" style="background:#ef4444" onclick="setColor('#ef4444')"></button>
+                        <button type="button" class="color-preset" style="background:#06b6d4" onclick="setColor('#06b6d4')"></button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal()">Отмена</button>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/profiles.js') }}"></script>
+{% endblock %}

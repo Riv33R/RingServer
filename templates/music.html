@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}Музыка{% endblock %}
+{% block page_title %}Музыкальный плеер оператора{% endblock %}
+
+{% block content %}
+<div class="music-page">
+    
+    <!-- Upload Section -->
+    <div class="card mb-4 mt-2">
+        <h3 class="card-title">Загрузить трек</h3>
+        <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 15px;">Поддерживаемые форматы: <b>MP3, WAV, OGG</b></p>
+        <div class="form-group row" style="display: flex; gap: 10px; align-items: center;">
+            <input type="file" id="audioFileInput" class="form-input" style="flex:1" accept=".mp3,.wav,.ogg">
+            <button class="btn btn-primary" id="btnUpload" onclick="uploadAudio()">Загрузить</button>
+        </div>
+        <div class="progress-bar-container" id="uploadProgressContainer" style="display:none; margin-top: 15px;">
+            <div class="progress-bar" id="uploadProgressBar" style="width: 0%; background-color: var(--primary);"></div>
+        </div>
+    </div>
+
+    <!-- Player Controls Card -->
+    <div class="card mb-4" style="background-color: var(--card-bg); border-left: 4px solid var(--primary);">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+            
+            <div style="flex: 1; min-width: 250px;">
+                <h4 style="margin: 0 0 5px 0; font-size: 1rem; color: var(--text-muted);">Сейчас играет</h4>
+                <div id="nowPlayingText" style="font-size: 1.2rem; font-weight: 600;">
+                    {% if status.is_playing and status.current_track %}
+                        {{ status.current_track }}
+                    {% else %}
+                        Ничего не играет
+                    {% endif %}
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="btn btn-danger-ghost" onclick="stopMusic()" id="btnStop" style="font-weight: 600; font-size: 1.1em; padding: 10px 20px;">
+                    ⏹ Остановить
+                </button>
+            </div>
+
+            <div style="min-width: 200px; display: flex; align-items: center; gap: 10px;">
+                <span title="Громкость">🔊</span>
+                <input type="range" id="volumeSlider" min="0" max="100" value="{{ status.volume }}" 
+                       style="flex: 1; cursor: pointer;" onchange="setVolume(this.value)" oninput="document.getElementById('volValue').textContent=this.value+'%'">
+                <span id="volValue" style="width: 40px; text-align: right; font-weight: 600;">{{ status.volume }}%</span>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Tracks List -->
+    <div class="card">
+        <h3 class="card-title">Список файлов</h3>
+        {% if audio_files|length > 0 %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th style="width: 100px;">Размер</th>
+                            <th style="width: 150px; text-align: right;">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audioTableBody">
+                        {% for f in audio_files %}
+                        <tr>
+                            <td><strong>{{ f.name }}</strong></td>
+                            <td class="text-muted">{{ (f.size / 1024 / 1024)|round(2) }} МБ</td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <button class="btn btn-sm btn-ghost" onclick="playMusic('{{ f.name }}')" title="Включить">▶️ Играть</button>
+                                <button class="btn btn-sm btn-danger-ghost" onclick="deleteAudio('{{ f.name }}')" title="Удалить">🗑️</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <p>Нет загруженных треков.</p>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Periodic status pull
+    setInterval(updateStatus, 3000);
+
+    async function updateStatus() {
+        try {
+            const res = await fetch('/api/music/status');
+            if(res.ok) {
+                const data = await res.json();
+                renderStatus(data);
+            }
+        } catch(e) {}
+    }
+
+    function renderStatus(status) {
+        // Only update UI elements if they are not being actively dragged/focused
+        
+        // Update Now Playing text
+        const np = document.getElementById('nowPlayingText');
+        if (status.is_playing && status.current_track) {
+            np.textContent = status.current_track;
+            np.style.color = 'var(--primary)';
+        } else {
+            np.textContent = 'Ничего не играет';
+            np.style.color = 'inherit';
+        }
+
+        // Only update volume slider if User isn't currently dragging it
+        const slider = document.getElementById('volumeSlider');
+        if (document.activeElement !== slider) {
+            slider.value = status.volume;
+            document.getElementById('volValue').textContent = status.volume + '%';
+        }
+    }
+
+    async function playMusic(filename) {
+        try {
+            const res = await fetch('/api/music/play', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename: filename})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                renderStatus(data.status);
+                showToast('Воспроизведение начато', 'success');
+            } else {
+                showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch(e) {
+            showToast('Ошибка соединения', 'error');
+        }
+    }
+
+    async function stopMusic() {
+        try {
+            const res = await fetch('/api/music/stop', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                renderStatus(data.status);
+                showToast('Воспроизведение остановлено', 'info');
+            } else {
+                showToast('Ошибка', 'error');
+            }
+        } catch(e) {
+            showToast('Ошибка соединения', 'error');
+        }
+    }
+
+    async function setVolume(val) {
+        try {
+            const res = await fetch('/api/music/volume', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({volume: val})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                renderStatus(data.status);
+            }
+        } catch(e) {}
+    }
+
+    async function deleteAudio(filename) {
+        if (!confirm(`Точно удалить файл "${filename}"?`)) return;
+        try {
+            const res = await fetch(`/api/upload-audio/${encodeURIComponent(filename)}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                showToast('Файл удалён', 'success');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                const data = await res.json();
+                showToast('Ошибка: ' + (data.error || 'Unknown'), 'error');
+            }
+        } catch(e) {
+            showToast('Ошибка соединения', 'error');
+        }
+    }
+
+    async function uploadAudio() {
+        const input = document.getElementById('audioFileInput');
+        if (!input.files || input.files.length === 0) {
+            showToast('Выберите файл', 'error');
+            return;
+        }
+
+        const file = input.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const btn = document.getElementById('btnUpload');
+        const cont = document.getElementById('uploadProgressContainer');
+        const bar = document.getElementById('uploadProgressBar');
+
+        btn.disabled = true;
+        input.disabled = true;
+        cont.style.display = 'block';
+        bar.style.width = '0%';
+
+        // Use XMLHttpRequest for progress tracking
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload-audio');
+        
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                bar.style.width = percent + '%';
+            }
+        };
+
+        xhr.onload = () => {
+            if (xhr.status === 200 || xhr.status === 201) {
+                bar.style.width = '100%';
+                showToast('Файл загружен', 'success');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                let msg = 'Ошибка загрузки';
+                try {
+                    const r = JSON.parse(xhr.responseText);
+                    msg = r.error || msg;
+                } catch(err){}
+                showToast(msg, 'error');
+                resetUploadUI();
+            }
+        };
+
+        xhr.onerror = () => {
+            showToast('Ошибка сети при загрузке', 'error');
+            resetUploadUI();
+        };
+
+        xhr.send(formData);
+
+        function resetUploadUI() {
+            btn.disabled = false;
+            input.disabled = false;
+            cont.style.display = 'none';
+            bar.style.width = '0%';
+        }
+    }
+</script>
+{% endblock %}
