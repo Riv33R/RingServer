@@ -1,16 +1,30 @@
+# Python artifacts
 __pycache__/
 *.py[cod]
 *$py.class
-venv/
+*.so
+.Python
 env/
-.env
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Application databases and logs
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
 scheduler.db
 ringscheduler.log
 logs/
 config.json
+*.zip
 
-# Ignore uploads except gitkeep
+# Audio uploads
 uploads/*
 !uploads/.gitkeep
+# Ignore temporary voice files from Telegram
+uploads/tg_voice_*
