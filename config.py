@@ -16,7 +16,12 @@ DEFAULTS = {
     "BELL_DURATION": 5,           # Seconds to ring (for audio mode)
     "DEBUG": False,
     "ADMIN_USERNAME": "admin",
-    "ADMIN_PASSWORD": "admin",
+    "EMERGENCY_FIRE_SOUND": "",   # Audio file for Fire Alarm
+    "EMERGENCY_DRILL_SOUND": "",  # Audio file for Drill
+    "EMERGENCY_LOCKDOWN_SOUND": "",# Audio file for Lockdown
+    "TELEGRAM_BOT_TOKEN": "",     # Telegram Bot Token
+    "TELEGRAM_BOT_PASSWORD": "ring", # Password required to authorize the bot
+    "TELEGRAM_AUTHORIZED_USERS": [], # List of Telegram User IDs allowed to send voice messages
 }
 
 

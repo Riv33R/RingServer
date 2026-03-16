@@ -24,6 +24,7 @@ import scheduler as sched
 import music_player
 from auth import auth_bp, login_required, admin_required
 from config import load_config, save_config
+import bot
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,6 +57,9 @@ def create_app():
 
     # Start background scheduler
     sched.start()
+    
+    # Start Telegram Bot
+    bot.start_bot()
 
     def allowed_file(filename):
         return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -377,9 +381,18 @@ def create_app():
     @admin_required
     def api_save_settings():
         data = request.json or {}
-        allowed_keys = {"BELL_MODE", "RELAY_SCRIPT", "DEFAULT_SOUND", "BELL_DURATION"}
+        allowed_keys = {
+            "BELL_MODE", "RELAY_SCRIPT", "DEFAULT_SOUND", "BELL_DURATION",
+            "EMERGENCY_FIRE_SOUND", "EMERGENCY_DRILL_SOUND", "EMERGENCY_LOCKDOWN_SOUND",
+            "TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_PASSWORD"
+        }
         filtered = {k: v for k, v in data.items() if k in allowed_keys}
         save_config(filtered)
+        
+        # Restart bot if token changed
+        if "TELEGRAM_BOT_TOKEN" in filtered:
+            bot.restart_bot()
+            
         return jsonify({"ok": True})
 
     @app.route("/api/upload-audio", methods=["POST"])
@@ -521,6 +534,38 @@ def create_app():
             notes=f"Manual ring by user {session.get('user_id')}"
         )
         return jsonify({"ok": True, "message": "Звонок подан!"})
+
+    @app.route("/api/emergency/<path:type>", methods=["POST"])
+    @login_required
+    def api_emergency_alert(type):
+        """Trigger an emergency alert of a specific type."""
+        cfg = load_config()
+        sound = ""
+        label = "Экстренная тревога"
+        
+        if type == "fire":
+            sound = cfg.get("EMERGENCY_FIRE_SOUND", "")
+            label = "Пожарная тревога"
+        elif type == "drill":
+            sound = cfg.get("EMERGENCY_DRILL_SOUND", "")
+            label = "Учебная тревога"
+        elif type == "lockdown":
+            sound = cfg.get("EMERGENCY_LOCKDOWN_SOUND", "")
+            label = "Блокировка"
+        else:
+            return jsonify({"error": "Unknown emergency type"}), 400
+
+        audio.ring_bell(sound_file=sound, duration=60) # Emergency plays longer
+        
+        profile = db.get_profile_for_today()
+        db.log_ring(
+            profile["id"] if profile else None,
+            None,
+            trigger_type="emergency",
+            success=True,
+            notes=f"Emergency ({type}) by user {session.get('user_id')}"
+        )
+        return jsonify({"ok": True, "message": f"{label} запущена!"})
 
     @app.route("/api/test-bell", methods=["POST"])
     @admin_required

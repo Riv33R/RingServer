@@ -20,6 +20,11 @@ def _play_wav(filepath: str, duration: int):
     """Play a WAV file using winsound (blocking, repeated for duration seconds)."""
     try:
         import winsound
+        # If duration is 0 or less, play once
+        if duration <= 0:
+            winsound.PlaySound(filepath, winsound.SND_FILENAME | winsound.SND_NODEFAULT)
+            return
+
         end_time = time.time() + duration
         while time.time() < end_time:
             winsound.PlaySound(filepath, winsound.SND_FILENAME | winsound.SND_NODEFAULT)
@@ -31,6 +36,11 @@ def _play_mp3(filepath: str, duration: int):
     """Play an MP3 using playsound3 (cross-platform, requires playsound3)."""
     try:
         from playsound3 import playsound
+        # If duration is 0 or less, play once
+        if duration <= 0:
+            playsound(filepath, block=True)
+            return
+
         # playsound3 plays once; loop it for duration
         end_time = time.time() + duration
         while time.time() < end_time:

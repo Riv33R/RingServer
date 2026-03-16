@@ -39,7 +39,24 @@
             <span class="ring-now-icon">🔔</span>
             <span>Дать звонок сейчас</span>
         </button>
-        <p class="ring-now-hint">Экстренный ручной звонок</p>
+        <p class="ring-now-hint">Обычный ручной звонок</p>
+    </div>
+
+    <!-- Emergency Alerts Card -->
+    <div class="card card-emergency" style="border: 2px solid #ef4444;">
+        <div class="card-label text-danger">Экстренные оповещения</div>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+            <button class="btn btn-danger" onclick="triggerEmergency('fire', 'ПОЖАРНУЮ ТРЕВОГУ')">
+                🚨 Пожарная тревога
+            </button>
+            <button class="btn btn-warning" style="background-color: #f59e0b; color: #fff; border: none;" onclick="triggerEmergency('drill', 'УЧЕБНУЮ ТРЕВОГУ')">
+                ⚠️ Учебная тревога
+            </button>
+            <button class="btn btn-primary" style="background-color: #6366f1; border: none;" onclick="triggerEmergency('lockdown', 'ТЕРРОРИСТИЧЕСКУЮ УГРОЗУ')">
+                🔒 Террористическая угроза
+            </button>
+        </div>
+        <p class="ring-now-hint mt-3">Нажатие требует подтверждения</p>
     </div>
 
     <!-- Today's Schedule Card -->

@@ -27,6 +27,31 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
     }
 });
 
+// -------- Save Telegram Settings --------
+async function saveTelegramSettings(e) {
+    if (e) e.preventDefault();
+    const payload = {
+        TELEGRAM_BOT_TOKEN: document.getElementById('sTelegramToken').value.trim(),
+        TELEGRAM_BOT_PASSWORD: document.getElementById('sTelegramPassword').value.trim(),
+    };
+
+    try {
+        const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            showToast('Настройки Telegram сохранены', 'success');
+        } else {
+            const data = await res.json();
+            showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка соединения', 'error');
+    }
+}
+
 // -------- Test bell --------
 async function testBell() {
     try {

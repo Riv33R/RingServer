@@ -155,6 +155,28 @@ async function ringNow() {
     }, 5000);
 }
 
+async function triggerEmergency(type, label) {
+    if (!confirm(`ВНИМАНИЕ!\nВы уверены, что хотите запустить ${label}?!`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/emergency/${type}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+            showToast('🚨 ' + (data.message || 'Тревога запущена!'), 'success');
+        } else {
+            showToast('Ошибка: ' + (data.error || 'Не удалось запустить тревогу'), 'error');
+        }
+    } catch (e) {
+        showToast('Ошибка соединения', 'error');
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     fetchStatus();
