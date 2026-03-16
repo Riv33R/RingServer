@@ -146,12 +146,12 @@ def _register_handlers(bot: telebot.TeleBot):
                 file_info = bot.get_file(file_id)
                 downloaded_file = bot.download_file(file_info.file_path)
                 
-                cfg = load_config()
-                uploads_dir = cfg.get("UPLOAD_FOLDER", "uploads")
-                os.makedirs(uploads_dir, exist_ok=True)
+                # Use a dedicated folder for voice messages instead of the main uploads folder
+                voice_dir = "voice_messages"
+                os.makedirs(voice_dir, exist_ok=True)
                 
                 # Telegram usually sends OGG Opus
-                ogg_path = os.path.join(uploads_dir, f"tg_voice_{chat_id}.ogg")
+                ogg_path = os.path.join(voice_dir, f"tg_voice_{chat_id}.ogg")
                 with open(ogg_path, 'wb') as new_file:
                     new_file.write(downloaded_file)
                 
@@ -161,7 +161,7 @@ def _register_handlers(bot: telebot.TeleBot):
                     import subprocess
                     import imageio_ffmpeg
                     
-                    wav_path = os.path.join(uploads_dir, f"tg_voice_{chat_id}.wav")
+                    wav_path = os.path.join(voice_dir, f"tg_voice_{chat_id}.wav")
                     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
                     
                     # Run ffmpeg to convert ogg to wav directly, bypassing pydub/ffprobe requirements

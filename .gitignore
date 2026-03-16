@@ -26,5 +26,6 @@ config.json
 # Audio uploads
 uploads/*
 !uploads/.gitkeep
-# Ignore temporary voice files from Telegram
-uploads/tg_voice_*
+
+# Temporary voice messages from Telegram
+voice_messages/
