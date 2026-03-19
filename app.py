@@ -484,6 +484,28 @@ def create_app():
     def api_music_status():
         return jsonify(music_player.get_status())
 
+    @app.route("/api/music/repeat", methods=["POST"])
+    @login_required
+    def api_music_repeat():
+        data = request.json or {}
+        enabled = bool(data.get("repeat", False))
+        music_player.set_repeat(enabled)
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=set_repeat enabled={enabled}")
+        return jsonify({"ok": True, "status": music_player.get_status()})
+
+    @app.route("/api/music/timer", methods=["POST"])
+    @login_required
+    def api_music_timer():
+        data = request.json or {}
+        minutes = int(data.get("minutes", 0))
+        if minutes <= 0:
+            music_player.cancel_sleep_timer()
+            logger.info(f"[AUDIT] user={session.get('user_id')} action=cancel_sleep_timer")
+        else:
+            music_player.set_sleep_timer(minutes * 60)
+            logger.info(f"[AUDIT] user={session.get('user_id')} action=set_sleep_timer minutes={minutes}")
+        return jsonify({"ok": True, "status": music_player.get_status()})
+
     @app.route("/api/music/upload", methods=["POST"])
     @login_required
     def api_music_upload():

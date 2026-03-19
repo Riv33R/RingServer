@@ -31,9 +31,23 @@
                         Ничего не играет
                     {% endif %}
                 </div>
+                <!-- Timer display -->
+                <div id="timerDisplay" style="font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">
+                    {% if status.is_playing %}
+                        {{ '%02d:%02d'|format(status.elapsed // 60, status.elapsed % 60) if status.elapsed else '00:00' }}
+                    {% else %}
+                        --:--
+                    {% endif %}
+                </div>
             </div>
 
-            <div style="display: flex; gap: 10px; align-items: center;">
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <!-- Repeat toggle -->
+                <button class="btn btn-ghost" id="btnRepeat" onclick="toggleRepeat()" 
+                        style="font-size: 1.1em; padding: 10px 16px; {% if status.repeat %}background: rgba(59,130,246,0.2); color: var(--accent-light); border-color: var(--accent);{% endif %}"
+                        title="Повтор трека">
+                    🔁 Повтор
+                </button>
                 <button class="btn btn-danger-ghost" onclick="stopMusic()" id="btnStop" style="font-weight: 600; font-size: 1.1em; padding: 10px 20px;">
                     ⏹ Остановить
                 </button>
@@ -66,6 +80,35 @@
             {% else %}
                 <p class="text-muted" style="text-align: center; padding: 15px 0;">Очередь пуста</p>
             {% endif %}
+        </div>
+    </div>
+
+    <!-- Sleep Timer Card -->
+    <div class="card mb-4" style="border-left: 4px solid var(--accent);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 class="card-title" style="margin: 0;">⏰ Таймер выключения</h3>
+            <div id="sleepTimerDisplay" style="font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 700; color: var(--accent-light);">
+                {% if status.sleep_timer and status.sleep_timer > 0 %}
+                    {{ '%02d:%02d'|format(status.sleep_timer // 60, status.sleep_timer % 60) }}
+                {% else %}
+                    —
+                {% endif %}
+            </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Быстрый выбор:</span>
+            <button class="btn btn-sm btn-ghost" onclick="setSleepTimer(15)">15 мин</button>
+            <button class="btn btn-sm btn-ghost" onclick="setSleepTimer(30)">30 мин</button>
+            <button class="btn btn-sm btn-ghost" onclick="setSleepTimer(45)">45 мин</button>
+            <button class="btn btn-sm btn-ghost" onclick="setSleepTimer(60)">1 час</button>
+            <div style="display: flex; gap: 6px; align-items: center; margin-left: 8px;">
+                <input type="number" id="customTimerMin" min="1" max="480" placeholder="мин" 
+                       style="width: 70px; background: var(--bg-700); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--text-primary); font-size: 0.85rem;">
+                <button class="btn btn-sm btn-primary" onclick="setSleepTimerCustom()">Задать</button>
+            </div>
+            <button class="btn btn-sm btn-danger-ghost" id="btnCancelTimer" 
+                    style="margin-left: auto; {% if not status.sleep_timer or status.sleep_timer == 0 %}display:none;{% endif %}"
+                    onclick="setSleepTimer(0)">✕ Отменить</button>
         </div>
     </div>
 
@@ -153,6 +196,102 @@
             queueEl.innerHTML = html;
         } else {
             queueEl.innerHTML = '<p class="text-muted" style="text-align: center; padding: 15px 0;">Очередь пуста</p>';
+        }
+
+        // Update timer
+        const timerEl = document.getElementById('timerDisplay');
+        if (timerEl) {
+            if (status.is_playing && status.elapsed !== undefined) {
+                const m = Math.floor(status.elapsed / 60).toString().padStart(2, '0');
+                const s = (status.elapsed % 60).toString().padStart(2, '0');
+                timerEl.textContent = m + ':' + s;
+            } else {
+                timerEl.textContent = '--:--';
+            }
+        }
+
+        // Update repeat button state
+        const btnRepeat = document.getElementById('btnRepeat');
+        if (btnRepeat) {
+            if (status.repeat) {
+                btnRepeat.style.background = 'rgba(59,130,246,0.2)';
+                btnRepeat.style.color = 'var(--accent-light)';
+                btnRepeat.style.borderColor = 'var(--accent)';
+                btnRepeat.title = 'Повтор: ВКЛ';
+            } else {
+                btnRepeat.style.background = '';
+                btnRepeat.style.color = '';
+                btnRepeat.style.borderColor = '';
+                btnRepeat.title = 'Повтор: ВЫКЛ';
+            }
+        }
+
+        // Update Sleep Timer
+        const stDisplay = document.getElementById('sleepTimerDisplay');
+        const btnCancelTimer = document.getElementById('btnCancelTimer');
+        if (stDisplay) {
+            if (status.sleep_timer && status.sleep_timer > 0) {
+                const m = Math.floor(status.sleep_timer / 60).toString().padStart(2, '0');
+                const s = (status.sleep_timer % 60).toString().padStart(2, '0');
+                stDisplay.textContent = m + ':' + s;
+                if (btnCancelTimer) btnCancelTimer.style.display = 'block';
+            } else {
+                stDisplay.textContent = '—';
+                if (btnCancelTimer) btnCancelTimer.style.display = 'none';
+            }
+        }
+    }
+
+    async function setSleepTimer(minutes) {
+        try {
+            const res = await fetch('/api/music/timer', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({minutes: minutes})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                renderStatus(data.status);
+                if (minutes > 0) {
+                    showToast(`Таймер установлен на ${minutes} мин.`, 'info');
+                } else {
+                    showToast('Таймер отменен', 'info');
+                }
+            }
+        } catch(e) {
+            showToast('Ошибка соединения', 'error');
+        }
+    }
+
+    function setSleepTimerCustom() {
+        const input = document.getElementById('customTimerMin');
+        const mins = parseInt(input.value);
+        if (isNaN(mins) || mins <= 0) {
+            showToast('Введите число минут', 'warning');
+            return;
+        }
+        setSleepTimer(mins);
+        input.value = '';
+    }
+
+    // Track repeat state locally for instant toggle feedback
+    let _repeatState = {{ 'true' if status.repeat else 'false' }};
+
+    async function toggleRepeat() {
+        _repeatState = !_repeatState;
+        try {
+            const res = await fetch('/api/music/repeat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({repeat: _repeatState})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                renderStatus(data.status);
+                showToast(_repeatState ? 'Повтор включен 🔁' : 'Повтор выключен', 'info');
+            }
+        } catch(e) {
+            showToast('Ошибка соединения', 'error');
         }
     }
 
