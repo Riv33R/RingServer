@@ -49,6 +49,26 @@
         </div>
     </div>
 
+    <!-- Queue Section -->
+    <div class="card mb-4" style="border-left: 4px solid #f59e0b;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 class="card-title" style="margin: 0;">📋 Очередь воспроизведения</h3>
+            <button class="btn btn-sm btn-danger-ghost" onclick="clearQueue()">Очистить очередь</button>
+        </div>
+        <div id="queueList">
+            {% if status.queue and status.queue|length > 0 %}
+                {% for track in status.queue %}
+                <div class="queue-item" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 6px;">
+                    <span><strong>{{ loop.index }}.</strong> {{ track }}</span>
+                    <button class="btn btn-sm btn-danger-ghost" onclick="removeFromQueue({{ loop.index0 }})" title="Убрать из очереди">✕</button>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted" style="text-align: center; padding: 15px 0;">Очередь пуста</p>
+            {% endif %}
+        </div>
+    </div>
+
     <!-- Tracks List -->
     <div class="card">
         <h3 class="card-title">Список файлов</h3>
@@ -59,7 +79,7 @@
                         <tr>
                             <th>Название</th>
                             <th style="width: 100px;">Размер</th>
-                            <th style="width: 150px; text-align: right;">Действия</th>
+                            <th style="width: 250px; text-align: right;">Действия</th>
                         </tr>
                     </thead>
                     <tbody id="audioTableBody">
@@ -69,6 +89,7 @@
                             <td class="text-muted">{{ (f.size / 1024 / 1024)|round(2) }} МБ</td>
                             <td style="text-align: right; white-space: nowrap;">
                                 <button class="btn btn-sm btn-ghost" onclick="playMusic('{{ f.name }}')" title="Включить">▶️ Играть</button>
+                                <button class="btn btn-sm btn-ghost" onclick="addToQueue('{{ f.name }}')" title="В очередь" style="color: #f59e0b;">📋 В очередь</button>
                                 <button class="btn btn-sm btn-danger-ghost" onclick="deleteAudio('{{ f.name }}')" title="Удалить">🗑️</button>
                             </td>
                         </tr>
@@ -102,8 +123,6 @@
     }
 
     function renderStatus(status) {
-        // Only update UI elements if they are not being actively dragged/focused
-        
         // Update Now Playing text
         const np = document.getElementById('nowPlayingText');
         if (status.is_playing && status.current_track) {
@@ -120,6 +139,21 @@
             slider.value = status.volume;
             document.getElementById('volValue').textContent = status.volume + '%';
         }
+
+        // Update queue list
+        const queueEl = document.getElementById('queueList');
+        if (status.queue && status.queue.length > 0) {
+            let html = '';
+            status.queue.forEach((track, index) => {
+                html += `<div class="queue-item" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 6px;">
+                    <span><strong>${index + 1}.</strong> ${track}</span>
+                    <button class="btn btn-sm btn-danger-ghost" onclick="removeFromQueue(${index})" title="Убрать из очереди">✕</button>
+                </div>`;
+            });
+            queueEl.innerHTML = html;
+        } else {
+            queueEl.innerHTML = '<p class="text-muted" style="text-align: center; padding: 15px 0;">Очередь пуста</p>';
+        }
     }
 
     async function playMusic(filename) {
@@ -135,6 +169,51 @@
                 showToast('Воспроизведение начато', 'success');
             } else {
                 showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch(e) {
+            showToast('Ошибка соединения', 'error');
+        }
+    }
+
+    async function addToQueue(filename) {
+        try {
+            const res = await fetch('/api/music/queue', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename: filename})
+            });
+            const data = await res.json();
+            if (res.ok) {
+                renderStatus(data.status);
+                showToast('Трек добавлен в очередь', 'success');
+            } else {
+                showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch(e) {
+            showToast('Ошибка соединения', 'error');
+        }
+    }
+
+    async function removeFromQueue(index) {
+        try {
+            const res = await fetch(`/api/music/queue/${index}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (res.ok) {
+                renderStatus(data.status);
+                showToast('Трек убран из очереди', 'info');
+            }
+        } catch(e) {
+            showToast('Ошибка соединения', 'error');
+        }
+    }
+
+    async function clearQueue() {
+        try {
+            const res = await fetch('/api/music/queue/clear', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                renderStatus(data.status);
+                showToast('Очередь очищена', 'info');
             }
         } catch(e) {
             showToast('Ошибка соединения', 'error');
@@ -173,7 +252,7 @@
     async function deleteAudio(filename) {
         if (!confirm(`Точно удалить файл "${filename}"?`)) return;
         try {
-            const res = await fetch(`/api/upload-audio/${encodeURIComponent(filename)}`, {
+            const res = await fetch(`/api/music/delete/${encodeURIComponent(filename)}`, {
                 method: 'DELETE'
             });
             if (res.ok) {
@@ -208,9 +287,8 @@
         cont.style.display = 'block';
         bar.style.width = '0%';
 
-        // Use XMLHttpRequest for progress tracking
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/upload-audio');
+        xhr.open('POST', '/api/music/upload');
         
         xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {

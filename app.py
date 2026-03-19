@@ -8,7 +8,7 @@ import datetime
 import logging
 import zipfile
 import shutil
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, g, make_response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, g, make_response, send_file
 import re
 
 def make_safe_filename(filename):
@@ -45,8 +45,9 @@ def create_app():
     app.secret_key = cfg["SECRET_KEY"]
     app.permanent_session_lifetime = datetime.timedelta(days=30)
 
-    # Ensure upload directory exists
+    # Ensure upload and music directories exist
     os.makedirs(cfg["UPLOAD_FOLDER"], exist_ok=True)
+    os.makedirs(cfg.get("MUSIC_FOLDER", "music"), exist_ok=True)
 
     # Initialize DB
     db.init_db()
@@ -165,12 +166,12 @@ def create_app():
     @login_required
     def music():
         cfg = load_config()
-        upload_folder = cfg["UPLOAD_FOLDER"]
+        music_folder = cfg.get("MUSIC_FOLDER", "music")
         audio_files = []
-        if os.path.isdir(upload_folder):
+        if os.path.isdir(music_folder):
             audio_files = [
-                {"name": f, "size": os.path.getsize(os.path.join(upload_folder, f))}
-                for f in os.listdir(upload_folder)
+                {"name": f, "size": os.path.getsize(os.path.join(music_folder, f))}
+                for f in os.listdir(music_folder)
                 if os.path.splitext(f)[1].lower() in (".mp3", ".wav", ".ogg")
             ]
         status = music_player.get_status()
@@ -433,8 +434,9 @@ def create_app():
              return jsonify({"error": "Трек не выбран"}), 400
              
         cfg = load_config()
+        music_folder = cfg.get("MUSIC_FOLDER", "music")
         safe_name = make_safe_filename(filename)
-        filepath = os.path.join(cfg["UPLOAD_FOLDER"], safe_name)
+        filepath = os.path.join(music_folder, safe_name)
         
         if music_player.play_track(filepath):
             return jsonify({"ok": True, "status": music_player.get_status()})
@@ -464,6 +466,64 @@ def create_app():
     @login_required
     def api_music_status():
         return jsonify(music_player.get_status())
+
+    @app.route("/api/music/upload", methods=["POST"])
+    @login_required
+    def api_music_upload():
+        cfg = load_config()
+        music_folder = cfg.get("MUSIC_FOLDER", "music")
+        if "file" not in request.files:
+            return jsonify({"error": "No file"}), 400
+        f = request.files["file"]
+        if not f.filename or not allowed_file(f.filename):
+            return jsonify({"error": "Invalid file type. Allowed: mp3, wav, ogg"}), 400
+        filename = make_safe_filename(f.filename)
+        dest = os.path.join(music_folder, filename)
+        f.save(dest)
+        return jsonify({"ok": True, "filename": filename, "path": os.path.abspath(dest)})
+
+    @app.route("/api/music/delete/<path:filename>", methods=["DELETE"])
+    @login_required
+    def api_music_delete(filename):
+        cfg = load_config()
+        music_folder = cfg.get("MUSIC_FOLDER", "music")
+        filename = make_safe_filename(filename)
+        dest = os.path.join(music_folder, filename)
+        if os.path.exists(dest):
+            try:
+                os.remove(dest)
+                return jsonify({"ok": True})
+            except Exception as e:
+                return jsonify({"error": f"Ошибка удаления: {str(e)}"}), 500
+        return jsonify({"error": "Файл не найден"}), 404
+
+    @app.route("/api/music/queue", methods=["POST"])
+    @login_required
+    def api_music_queue_add():
+        data = request.json or {}
+        filename = data.get("filename")
+        if not filename:
+            return jsonify({"error": "Трек не выбран"}), 400
+        cfg = load_config()
+        music_folder = cfg.get("MUSIC_FOLDER", "music")
+        safe_name = make_safe_filename(filename)
+        filepath = os.path.join(music_folder, safe_name)
+        if music_player.add_to_queue(filepath):
+            return jsonify({"ok": True, "status": music_player.get_status()})
+        return jsonify({"error": "Файл не найден"}), 404
+
+    @app.route("/api/music/queue/<int:index>", methods=["DELETE"])
+    @login_required
+    def api_music_queue_remove(index):
+        if music_player.remove_from_queue(index):
+            return jsonify({"ok": True, "status": music_player.get_status()})
+        return jsonify({"error": "Неверный индекс"}), 400
+
+    @app.route("/api/music/queue/clear", methods=["POST"])
+    @login_required
+    def api_music_queue_clear():
+        music_player.clear_queue()
+        return jsonify({"ok": True, "status": music_player.get_status()})
 
     @app.route("/api/change-password", methods=["POST"])
     @login_required
@@ -574,6 +634,80 @@ def create_app():
         cfg = load_config()
         audio.ring_bell(sound_file=cfg.get("DEFAULT_SOUND", ""), duration=2)
         return jsonify({"ok": True})
+
+    # ================================================================== #
+    #  BACKUP / RESTORE
+    # ================================================================== #
+
+    @app.route("/api/backup", methods=["GET"])
+    @admin_required
+    def api_backup():
+        """Download a ZIP backup of the database and config."""
+        cfg = load_config()
+        db_path = cfg.get("DATABASE", "ringscheduler.db")
+        config_path = os.path.join(os.path.dirname(__file__), "config.json")
+        
+        # Create ZIP in memory
+        mem_zip = io.BytesIO()
+        with zipfile.ZipFile(mem_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+            if os.path.exists(db_path):
+                zf.write(db_path, os.path.basename(db_path))
+            if os.path.exists(config_path):
+                zf.write(config_path, "config.json")
+        mem_zip.seek(0)
+        
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        return send_file(
+            mem_zip,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"ringscheduler_backup_{timestamp}.zip"
+        )
+
+    @app.route("/api/backup/restore", methods=["POST"])
+    @admin_required
+    def api_backup_restore():
+        """Restore from a ZIP backup."""
+        if "file" not in request.files:
+            return jsonify({"error": "No file"}), 400
+        f = request.files["file"]
+        if not f.filename or not f.filename.lower().endswith('.zip'):
+            return jsonify({"error": "Нужен ZIP-архив"}), 400
+        
+        try:
+            cfg = load_config()
+            base_dir = os.path.dirname(__file__)
+            
+            # Save uploaded ZIP to temp
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+            f.save(tmp.name)
+            tmp.close()
+            
+            with zipfile.ZipFile(tmp.name, 'r') as zf:
+                names = zf.namelist()
+                
+                # Restore database
+                db_name = cfg.get("DATABASE", "ringscheduler.db")
+                if db_name in names or os.path.basename(db_name) in names:
+                    archive_name = db_name if db_name in names else os.path.basename(db_name)
+                    with zf.open(archive_name) as src:
+                        with open(os.path.join(base_dir, os.path.basename(db_name)), 'wb') as dst:
+                            dst.write(src.read())
+                
+                # Restore config
+                if "config.json" in names:
+                    with zf.open("config.json") as src:
+                        with open(os.path.join(base_dir, "config.json"), 'wb') as dst:
+                            dst.write(src.read())
+            
+            # Clean up temp file
+            os.unlink(tmp.name)
+            
+            return jsonify({"ok": True, "message": "Резервная копия восстановлена. Перезагрузите страницу."})
+        except Exception as e:
+            logger.error(f"Restore failed: {e}")
+            return jsonify({"error": f"Ошибка восстановления: {str(e)}"}), 500
 
     return app
 

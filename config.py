@@ -10,6 +10,7 @@ DEFAULTS = {
     "HOST": "0.0.0.0",
     "DATABASE": "ringscheduler.db",
     "UPLOAD_FOLDER": "uploads",
+    "MUSIC_FOLDER": "music",
     "BELL_MODE": "audio",        # "audio" | "script" | "both" | "log"
     "RELAY_SCRIPT": "",           # Path to .bat or .py script
     "DEFAULT_SOUND": "",          # Default audio file path

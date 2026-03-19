@@ -59,6 +59,45 @@
     --shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
+/* Light theme overrides for dashboard cards */
+.theme-light .card-clock {
+    background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 50%, #bfdbfe 100%);
+    border-color: rgba(59,130,246,0.3);
+}
+.theme-light .clock-time {
+    color: #1e3a5f;
+    text-shadow: none;
+}
+.theme-light .profile-badge {
+    background: rgba(0,0,0,0.05);
+    border-color: rgba(0,0,0,0.1);
+}
+
+.theme-light .card-next-bell {
+    background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
+    border-color: rgba(16,185,129,0.3);
+}
+.theme-light .next-bell-time {
+    text-shadow: none;
+}
+
+.theme-light .card-ring-now {
+    background: linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%);
+    border-color: rgba(239,68,68,0.25);
+}
+
+.theme-light .btn-danger-ghost {
+    color: #dc2626;
+}
+
+.theme-light .logo-title {
+    color: var(--text-primary);
+}
+
+.theme-light a:hover {
+    color: var(--accent);
+}
+
 html { font-size: 15px; }
 
 body {

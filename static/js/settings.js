@@ -8,6 +8,9 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
         RELAY_SCRIPT: document.getElementById('sRelayScript').value.trim(),
         DEFAULT_SOUND: document.getElementById('sDefaultSound').value,
         BELL_DURATION: parseInt(document.getElementById('sBellDuration').value) || 5,
+        EMERGENCY_FIRE_SOUND: document.getElementById('sFireSound').value,
+        EMERGENCY_DRILL_SOUND: document.getElementById('sDrillSound').value,
+        EMERGENCY_LOCKDOWN_SOUND: document.getElementById('sLockdownSound').value,
     };
 
     try {

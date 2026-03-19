@@ -29,3 +29,6 @@ uploads/*
 
 # Temporary voice messages from Telegram
 voice_messages/
+
+# Music files
+music/
