@@ -17,7 +17,7 @@ venv.bak/
 *.swo
 
 # Project specific
-scheduler.db
+*.db
 ringscheduler.log
 logs/
 config.json
