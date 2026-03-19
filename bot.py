@@ -6,7 +6,7 @@ import time
 import logging
 import threading
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 import audio
 from config import load_config, save_config
@@ -70,14 +70,22 @@ def add_authorized_user(user_id):
         auth_users.append(user_id)
         save_config({"TELEGRAM_AUTHORIZED_USERS": auth_users})
 
+def _send_main_menu(bot_instance, chat_id):
+    """Send the main reply keyboard with emergency buttons."""
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row(KeyboardButton("🚨 Пожарная тревога"))
+    markup.row(KeyboardButton("⚠️ Учебная тревога"))
+    markup.row(KeyboardButton("🔒 Террористическая угроза"))
+    bot_instance.send_message(chat_id, "Главное меню. Отправьте голосовое сообщение или выберите экстренное оповещение:", reply_markup=markup)
+
 def _register_handlers(bot: telebot.TeleBot):
     
     @bot.message_handler(commands=['start'])
     def handle_start(message):
         if is_authorized(message.from_user.id):
-            bot.reply_to(message, "Вы уже авторизованы. Можете отправлять голосовые сообщения для трансляции.")
+            _send_main_menu(bot, message.chat.id)
         else:
-            bot.reply_to(message, "Привет! Для доступа к трансляции голосовых сообщений, введите пароль (команда: `/auth <пароль>`)", parse_mode="Markdown")
+            bot.reply_to(message, "Привет! Для доступа введите пароль: `/auth <пароль>`", parse_mode="Markdown")
 
     @bot.message_handler(commands=['auth'])
     def handle_auth(message):
@@ -96,11 +104,40 @@ def _register_handlers(bot: telebot.TeleBot):
         
         if password == expected:
             add_authorized_user(message.from_user.id)
-            bot.reply_to(message, "✅ Пароль верный! Вы успешно авторизованы.\nТеперь вы можете отправлять мне голосовые сообщения, и я буду транслировать их через систему оповещения.")
+            bot.reply_to(message, "✅ Пароль верный! Вы успешно авторизованы.")
+            _send_main_menu(bot, message.chat.id)
             logger.info(f"Telegram user {message.from_user.id} authorized successfully.")
         else:
             bot.reply_to(message, "❌ Неверный пароль.")
             logger.warning(f"Failed authorization attempt by Telegram user {message.from_user.id}")
+
+    @bot.message_handler(commands=['menu'])
+    def handle_menu(message):
+        if not is_authorized(message.from_user.id):
+            bot.reply_to(message, "Сначала авторизуйтесь через `/auth <пароль>`.", parse_mode="Markdown")
+            return
+        _send_main_menu(bot, message.chat.id)
+
+    # Emergency alert text button handler
+    @bot.message_handler(func=lambda m: m.text in ["🚨 Пожарная тревога", "⚠️ Учебная тревога", "🔒 Террористическая угроза"])
+    def handle_emergency_text(message):
+        if not is_authorized(message.from_user.id):
+            bot.reply_to(message, "У вас нет доступа.")
+            return
+
+        text_to_type = {
+            "🚨 Пожарная тревога": ("fire", "ПОЖАРНУЮ ТРЕВОГУ"),
+            "⚠️ Учебная тревога": ("drill", "УЧЕБНУЮ ТРЕВОГУ"),
+            "🔒 Террористическая угроза": ("lockdown", "ТЕРРОРИСТИЧЕСКУЮ УГРОЗУ"),
+        }
+        etype, label = text_to_type[message.text]
+
+        markup = InlineKeyboardMarkup()
+        markup.add(
+            InlineKeyboardButton(f"✅ Да, запустить", callback_data=f"emergency_confirm_{etype}"),
+            InlineKeyboardButton("❌ Отмена", callback_data="emergency_cancel")
+        )
+        bot.send_message(message.chat.id, f"⚠️ Вы уверены, что хотите запустить {label}?", reply_markup=markup)
 
     @bot.message_handler(content_types=['voice'])
     def handle_voice(message):
@@ -123,6 +160,35 @@ def _register_handlers(bot: telebot.TeleBot):
         markup.add(btn_yes, btn_no)
         
         bot.reply_to(message, "Воспроизвести это голосовое сообщение по громкой связи?", reply_markup=markup)
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("emergency_"))
+    def handle_emergency_callback(call):
+        chat_id = call.message.chat.id
+        
+        if call.data == "emergency_cancel":
+            bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text="Отменено.")
+            return
+
+        # call.data = "emergency_confirm_fire" / "emergency_confirm_drill" / "emergency_confirm_lockdown"
+        etype = call.data.replace("emergency_confirm_", "")
+        cfg = load_config()
+        
+        sound_map = {
+            "fire": ("EMERGENCY_FIRE_SOUND", "🚨 Пожарная тревога запущена!"),
+            "drill": ("EMERGENCY_DRILL_SOUND", "⚠️ Учебная тревога запущена!"),
+            "lockdown": ("EMERGENCY_LOCKDOWN_SOUND", "🔒 Террористическая угроза запущена!"),
+        }
+        
+        if etype not in sound_map:
+            bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text="Неизвестный тип тревоги.")
+            return
+        
+        sound_key, success_text = sound_map[etype]
+        sound = cfg.get(sound_key, "")
+        
+        audio.ring_bell(sound_file=sound, duration=60)
+        bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, text=success_text)
+        logger.info(f"Emergency '{etype}' triggered by Telegram user {call.from_user.id}")
 
     @bot.callback_query_handler(func=lambda call: call.data in ["play_voice", "cancel_voice"])
     def handle_voice_callback(call):

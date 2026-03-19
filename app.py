@@ -196,6 +196,7 @@ def create_app():
         pid = db.create_profile(name, data.get("description", ""), data.get("color", "#3b82f6"))
         if pid is None:
             return jsonify({"error": "Профиль с таким именем уже существует"}), 409
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=create_profile name='{name}' pid={pid}")
         return jsonify(db.get_profile(pid)), 201
 
     @app.route("/api/profiles/<int:pid>", methods=["PUT"])
@@ -204,6 +205,7 @@ def create_app():
         data = request.json or {}
         db.update_profile(pid, **data)
         sched.refresh()
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=update_profile pid={pid} data={data}")
         return jsonify(db.get_profile(pid))
 
     @app.route("/api/profiles/<int:pid>/activate", methods=["POST"])
@@ -211,6 +213,7 @@ def create_app():
     def api_activate_profile(pid):
         db.set_active_profile(pid)
         sched.refresh()
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=activate_profile pid={pid}")
         return jsonify({"ok": True})
 
     @app.route("/api/profiles/<int:pid>", methods=["DELETE"])
@@ -218,6 +221,7 @@ def create_app():
     def api_delete_profile(pid):
         db.delete_profile(pid)
         sched.refresh()
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=delete_profile pid={pid}")
         return jsonify({"ok": True})
 
     # ================================================================== #
@@ -248,6 +252,7 @@ def create_app():
             bell_type=data.get("bell_type", "lesson"),
         )
         sched.refresh()
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=create_bell pid={pid} time={hour:02d}:{minute:02d} label='{data.get('label','')}' type={data.get('bell_type','lesson')}")
         return jsonify(db.get_bell(bid)), 201
 
     @app.route("/api/bells/<int:bid>", methods=["PUT"])
@@ -256,6 +261,7 @@ def create_app():
         data = request.json or {}
         db.update_bell(bid, **data)
         sched.refresh()
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=update_bell bid={bid} data={data}")
         return jsonify(db.get_bell(bid))
 
     @app.route("/api/bells/<int:bid>", methods=["DELETE"])
@@ -263,6 +269,7 @@ def create_app():
     def api_delete_bell(bid):
         db.delete_bell(bid)
         sched.refresh()
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=delete_bell bid={bid}")
         return jsonify({"ok": True})
 
     @app.route("/api/profiles/<int:pid>/export", methods=["GET"])
@@ -317,6 +324,7 @@ def create_app():
                     continue # skip invalid rows
                     
             sched.refresh()
+            logger.info(f"[AUDIT] user={session.get('user_id')} action=import_schedule pid={pid} count={imported_count}")
             return jsonify({"ok": True, "count": imported_count})
         except Exception as e:
             return jsonify({"error": f"Error parsing CSV: {str(e)}"}), 400
@@ -340,6 +348,7 @@ def create_app():
             return jsonify({"error": "weekday must be 0-6"}), 400
         db.set_week_assignment(weekday, profile_id)
         sched.refresh()
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=set_week_assignment weekday={weekday} profile_id={profile_id}")
         return jsonify({"ok": True})
 
     # ================================================================== #
@@ -365,6 +374,7 @@ def create_app():
         desc = data.get("description", "")
         db.set_calendar_override(date_str, profile_id, desc)
         sched.refresh()
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=set_calendar_override date={date_str} profile_id={profile_id} desc='{desc}'")
         return jsonify({"ok": True})
 
     @app.route("/api/calendar/<date_str>", methods=["DELETE"])
@@ -372,6 +382,7 @@ def create_app():
     def api_delete_calendar_override(date_str):
         db.delete_calendar_override(date_str)
         sched.refresh()
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=delete_calendar_override date={date_str}")
         return jsonify({"ok": True})
 
     # ================================================================== #
@@ -389,6 +400,7 @@ def create_app():
         }
         filtered = {k: v for k, v in data.items() if k in allowed_keys}
         save_config(filtered)
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=save_settings keys={list(filtered.keys())}")
         
         # Restart bot if token changed
         if "TELEGRAM_BOT_TOKEN" in filtered:
@@ -408,6 +420,7 @@ def create_app():
         filename = make_safe_filename(f.filename)
         dest = os.path.join(cfg["UPLOAD_FOLDER"], filename)
         f.save(dest)
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=upload_audio file='{filename}'")
         return jsonify({"ok": True, "filename": filename, "path": os.path.abspath(dest)})
 
     @app.route("/api/upload-audio/<path:filename>", methods=["DELETE"])
@@ -420,6 +433,7 @@ def create_app():
         if os.path.exists(dest):
             try:
                 os.remove(dest)
+                logger.info(f"[AUDIT] user={session.get('user_id')} action=delete_audio file='{filename}'")
                 return jsonify({"ok": True})
             except Exception as e:
                 return jsonify({"error": f"Ошибка удаления: {str(e)}"}), 500
@@ -439,6 +453,7 @@ def create_app():
         filepath = os.path.join(music_folder, safe_name)
         
         if music_player.play_track(filepath):
+            logger.info(f"[AUDIT] user={session.get('user_id')} action=music_play file='{safe_name}'")
             return jsonify({"ok": True, "status": music_player.get_status()})
         return jsonify({"error": "Ошибка воспроизведения"}), 500
 
@@ -446,6 +461,7 @@ def create_app():
     @login_required
     def api_music_stop():
         if music_player.stop_track():
+            logger.info(f"[AUDIT] user={session.get('user_id')} action=music_stop")
             return jsonify({"ok": True, "status": music_player.get_status()})
         return jsonify({"error": "Ошибка остановки"}), 500
 
@@ -459,6 +475,7 @@ def create_app():
              return jsonify({"error": "Некорректная громкость"}), 400
              
         if music_player.set_system_volume(level):
+            logger.info(f"[AUDIT] user={session.get('user_id')} action=set_volume level={level}")
             return jsonify({"ok": True, "status": music_player.get_status()})
         return jsonify({"error": "Ошибка изменения громкости"}), 500
 
@@ -480,6 +497,7 @@ def create_app():
         filename = make_safe_filename(f.filename)
         dest = os.path.join(music_folder, filename)
         f.save(dest)
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=music_upload file='{filename}'")
         return jsonify({"ok": True, "filename": filename, "path": os.path.abspath(dest)})
 
     @app.route("/api/music/delete/<path:filename>", methods=["DELETE"])
@@ -492,6 +510,7 @@ def create_app():
         if os.path.exists(dest):
             try:
                 os.remove(dest)
+                logger.info(f"[AUDIT] user={session.get('user_id')} action=music_delete file='{filename}'")
                 return jsonify({"ok": True})
             except Exception as e:
                 return jsonify({"error": f"Ошибка удаления: {str(e)}"}), 500
@@ -509,6 +528,7 @@ def create_app():
         safe_name = make_safe_filename(filename)
         filepath = os.path.join(music_folder, safe_name)
         if music_player.add_to_queue(filepath):
+            logger.info(f"[AUDIT] user={session.get('user_id')} action=queue_add file='{safe_name}'")
             return jsonify({"ok": True, "status": music_player.get_status()})
         return jsonify({"error": "Файл не найден"}), 404
 
@@ -539,6 +559,7 @@ def create_app():
         if not check_password_hash(user["password_hash"], old_pw):
             return jsonify({"error": "Неверный текущий пароль"}), 403
         db.update_user_password(uid, new_pw)
+        logger.info(f"[AUDIT] user={uid} action=change_password")
         return jsonify({"ok": True})
 
     @app.route("/api/users", methods=["POST"])
@@ -551,6 +572,7 @@ def create_app():
         if not username or not password:
             return jsonify({"error": "Логин и пароль обязательны"}), 400
         if db.create_user(username, password, is_admin):
+            logger.info(f"[AUDIT] user={session.get('user_id')} action=create_user username='{username}' is_admin={is_admin}")
             return jsonify({"ok": True}), 201
         return jsonify({"error": "Пользователь уже существует"}), 409
 
@@ -560,6 +582,7 @@ def create_app():
         if uid == session.get("user_id"):
             return jsonify({"error": "Нельзя удалить себя"}), 400
         db.delete_user(uid)
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=delete_user uid={uid}")
         return jsonify({"ok": True})
 
     # ================================================================== #
@@ -593,6 +616,7 @@ def create_app():
             success=True,
             notes=f"Manual ring by user {session.get('user_id')}"
         )
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=ring_now sound='{sound}'")
         return jsonify({"ok": True, "message": "Звонок подан!"})
 
     @app.route("/api/emergency/<path:type>", methods=["POST"])
@@ -625,6 +649,7 @@ def create_app():
             success=True,
             notes=f"Emergency ({type}) by user {session.get('user_id')}"
         )
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=emergency type={type} label='{label}'")
         return jsonify({"ok": True, "message": f"{label} запущена!"})
 
     @app.route("/api/test-bell", methods=["POST"])
@@ -633,6 +658,7 @@ def create_app():
         """Test bell without logging."""
         cfg = load_config()
         audio.ring_bell(sound_file=cfg.get("DEFAULT_SOUND", ""), duration=2)
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=test_bell")
         return jsonify({"ok": True})
 
     # ================================================================== #
@@ -657,6 +683,7 @@ def create_app():
         mem_zip.seek(0)
         
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        logger.info(f"[AUDIT] user={session.get('user_id')} action=backup_download")
         return send_file(
             mem_zip,
             mimetype='application/zip',
@@ -704,6 +731,7 @@ def create_app():
             # Clean up temp file
             os.unlink(tmp.name)
             
+            logger.info(f"[AUDIT] user={session.get('user_id')} action=backup_restore file='{f.filename}'")
             return jsonify({"ok": True, "message": "Резервная копия восстановлена. Перезагрузите страницу."})
         except Exception as e:
             logger.error(f"Restore failed: {e}")
